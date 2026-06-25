@@ -68,7 +68,7 @@ exports.createOrder = async (req, res) => {
 };
 
 // Get user orders
-exports.getUserOrders = async (req, res) => {
+exports.getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({ customerId: req.user.id })
       .sort({ createdAt: -1 });

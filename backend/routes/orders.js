@@ -2,7 +2,7 @@
 const express = require('express');
 const {
   createOrder,
-  getUserOrders,
+  getMyOrders,
   getOrderById
 } = require('../controllers/orderController');
 const { auth } = require('../middleware/auth');
@@ -13,7 +13,7 @@ const router = express.Router();
 router.use(auth);
 
 router.post('/', createOrder);           // POST /api/orders
-router.get('/', getUserOrders);          // GET  /api/orders
+router.get('/', getMyOrders);          // GET  /api/orders
 router.get('/:id', getOrderById);        // GET  /api/orders/:id
 
 module.exports = router;
