@@ -1,43 +1,92 @@
 // src/components/FoodCard.js
-import React from 'react';
+import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 
-const EMOJI_MAP = {
-  pizza: '🍕', burger: '🍔', cake: '🎂',
-  salad: '🥗', sandwich: '🥪', drink: '🥤',
-  sushi: '🍱', pasta: '🍝', default: '🍽️'
+const FALLBACK_IMAGES = {
+  pizza:    'https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=400&q=80',
+  burger:   'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
+  cake:     'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80',
+  salad:    'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400&q=80',
+  sandwich: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80',
+  drink:    'https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400&q=80',
+  sushi:    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&q=80',
+  pasta:    'https://images.unsplash.com/photo-1481931098730-318b6f776db0?w=400&q=80',
+  other:    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80',
 };
 
 const FoodCard = ({ food }) => {
   const { addItem, items } = useCart();
-  const emoji = EMOJI_MAP[food.category?.toLowerCase()] || EMOJI_MAP.default;
-  const inCart = items.find(i => i._id === food._id);
+  const [added, setAdded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const cartItem = items.find(i => i._id === food._id);
+  const qty = cartItem?.quantity || 0;
+
+  const imgSrc = (!food.image || imgError)
+    ? (FALLBACK_IMAGES[food.category?.toLowerCase()] || FALLBACK_IMAGES.other)
+    : food.image;
+
+  const handleAdd = () => {
+    addItem(food);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1200);
+  };
+
+  const stars = Math.round(food.rating || 0);
 
   return (
-    <div style={styles.card}>
-      <div style={styles.imgWrap}>
-        <span style={styles.emoji}>{emoji}</span>
-        {food.stock < 5 && food.stock > 0 && (
-          <span style={styles.lowStock}>Only {food.stock} left</span>
+    <div style={s.card}>
+      {/* Image */}
+      <div style={s.imgWrap}>
+        <img
+          src={imgSrc}
+          alt={food.name}
+          style={s.img}
+          onError={() => setImgError(true)}
+        />
+        {food.preparationTime && (
+          <div style={s.timeBadge}>⏱ {food.preparationTime} min</div>
         )}
-        {food.stock === 0 && (
-          <span style={{ ...styles.lowStock, background: '#E24B4A' }}>Out of stock</span>
+        {!food.isAvailable && (
+          <div style={s.unavailableOverlay}>Unavailable</div>
         )}
       </div>
-      <div style={styles.info}>
-        <div style={styles.name}>{food.name}</div>
-        <div style={styles.desc}>{food.description?.substring(0, 50)}{food.description?.length > 50 ? '...' : ''}</div>
-        <div style={styles.meta}>
-          <span style={styles.time}>⏱ {food.preparationTime || 20} min</span>
-        </div>
-        <div style={styles.bottom}>
-          <span style={styles.price}>${food.price?.toFixed(2)}</span>
+
+      {/* Body */}
+      <div style={s.body}>
+        <div style={s.category}>{food.category}</div>
+        <h3 style={s.name}>{food.name}</h3>
+        <p style={s.desc}>{food.description}</p>
+
+        {/* Rating */}
+        {food.rating > 0 && (
+          <div style={s.ratingRow}>
+            <div style={s.stars}>
+              {[1,2,3,4,5].map(i => (
+                <span key={i} style={{ color: i <= stars ? '#F5A623' : '#E0DDD9', fontSize: '12px' }}>★</span>
+              ))}
+            </div>
+            <span style={s.ratingNum}>{food.rating?.toFixed(1)}</span>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={s.footer}>
+          <div>
+            <div style={s.price}>${food.price?.toFixed(2)}</div>
+            {qty > 0 && <div style={s.inCart}>{qty} in cart</div>}
+          </div>
+
           <button
-            style={{ ...styles.addBtn, ...(food.stock === 0 ? styles.disabledBtn : {}), ...(inCart ? styles.inCartBtn : {}) }}
-            onClick={() => food.stock > 0 && addItem({ ...food, emoji })}
-            disabled={food.stock === 0}
+            style={{
+              ...s.addBtn,
+              ...(added ? s.addBtnAdded : {}),
+              ...((!food.isAvailable) ? s.addBtnDisabled : {}),
+            }}
+            onClick={handleAdd}
+            disabled={!food.isAvailable}
           >
-            {inCart ? `In cart (${inCart.quantity})` : '+ Add'}
+            {added ? '✓' : qty > 0 ? `+${qty + 1}` : '+ Add'}
           </button>
         </div>
       </div>
@@ -45,43 +94,117 @@ const FoodCard = ({ food }) => {
   );
 };
 
-const styles = {
+const s = {
   card: {
     background: '#fff',
-    border: '0.5px solid #EBEBEB',
-    borderRadius: '12px',
+    borderRadius: '16px',
     overflow: 'hidden',
-    transition: 'box-shadow 0.2s',
+    border: '1px solid #F0EDE9',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+    cursor: 'default',
   },
+
   imgWrap: {
-    height: '110px',
-    background: '#FDF0E8',
+    position: 'relative',
+    height: '160px',
+    overflow: 'hidden',
+    background: '#F8F6F2',
+  },
+  img: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    transition: 'transform 0.3s',
+  },
+  timeBadge: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    background: 'rgba(255,255,255,0.92)',
+    color: '#4A4A4A',
+    fontSize: '11px',
+    fontWeight: '500',
+    padding: '3px 8px',
+    borderRadius: '12px',
+    backdropFilter: 'blur(4px)',
+  },
+  unavailableOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'rgba(0,0,0,0.45)',
+    color: '#fff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
+    fontSize: '13px',
+    fontWeight: '500',
   },
-  emoji: { fontSize: '48px' },
-  lowStock: {
-    position: 'absolute', top: '8px', right: '8px',
-    background: '#E8621A', color: '#fff',
-    fontSize: '10px', padding: '2px 8px',
-    borderRadius: '20px',
+
+  body: { padding: '14px' },
+
+  category: {
+    fontSize: '11px',
+    fontWeight: '600',
+    color: '#E8621A',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginBottom: '4px',
   },
-  info: { padding: '12px 14px' },
-  name: { fontSize: '14px', fontWeight: '500', marginBottom: '2px' },
-  desc: { fontSize: '12px', color: '#888780', marginBottom: '6px', lineHeight: '1.4' },
-  meta: { marginBottom: '8px' },
-  time: { fontSize: '11px', color: '#888780' },
-  bottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  price: { fontSize: '15px', fontWeight: '600', color: '#E8621A' },
+  name: {
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: '4px',
+    lineHeight: 1.3,
+  },
+  desc: {
+    fontSize: '12px',
+    color: '#888780',
+    marginBottom: '8px',
+    lineHeight: 1.5,
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  },
+
+  ratingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginBottom: '10px',
+  },
+  stars: { display: 'flex', gap: '1px' },
+  ratingNum: { fontSize: '11px', color: '#888780' },
+
+  footer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  price: { fontSize: '17px', fontWeight: '700', color: '#E8621A' },
+  inCart: { fontSize: '10px', color: '#888780', marginTop: '1px' },
+
   addBtn: {
-    background: '#E8621A', color: '#fff',
-    border: 'none', borderRadius: '8px',
-    padding: '6px 14px', fontSize: '12px', fontWeight: '500',
+    background: '#E8621A',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '8px 16px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'background 0.15s, transform 0.1s',
+    minWidth: '60px',
   },
-  inCartBtn: { background: '#FDF0E8', color: '#E8621A' },
-  disabledBtn: { background: '#EBEBEB', color: '#888780' },
+  addBtnAdded: {
+    background: '#3B6D11',
+  },
+  addBtnDisabled: {
+    background: '#C4C1BB',
+    cursor: 'not-allowed',
+  },
 };
 
 export default FoodCard;
