@@ -6,19 +6,17 @@ const Order = require('../models/Order');
 // ─────────────────────────────────────────────
 // INITIALIZE PAYMENT
 // ─────────────────────────────────────────────
-// Called by frontend before redirecting to PayHere
-// Returns the payment params needed to build the PayHere form
 
 exports.initializePayment = async (req, res) => {
   try {
     const { orderId } = req.body;
 
+    // orderId ici = order._id (MongoDB ObjectId) envoyé par Checkout.js
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Make sure the order belongs to this user
     if (order.customerId.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
@@ -29,11 +27,20 @@ exports.initializePayment = async (req, res) => {
 
     const merchantCode = process.env.PAYHERE_MERCHANT_CODE;
     const merchantSecret = process.env.PAYHERE_MERCHANT_SECRET;
+
+    // Vérification que les credentials sont bien définis dans .env
+    if (!merchantCode || !merchantSecret) {
+      return res.status(500).json({
+        success: false,
+        message: 'PayHere credentials missing in .env (PAYHERE_MERCHANT_CODE / PAYHERE_MERCHANT_SECRET)'
+      });
+    }
+
     const paymentId = `PAY-${Date.now()}`;
     const amount = order.totalAmount.toFixed(2);
     const currency = 'USD';
 
-    // PayHere hash: MD5(merchant_id + order_id + amount + currency + MD5(secret))
+    // Hash PayHere : MD5(merchant_id + order_id + amount + currency + MD5(secret).toUpperCase())
     const hashedSecret = crypto
       .createHash('md5')
       .update(merchantSecret)
@@ -46,7 +53,7 @@ exports.initializePayment = async (req, res) => {
       .digest('hex')
       .toUpperCase();
 
-    // Save a pending Payment record
+    // Enregistrer le paiement en statut "pending"
     await Payment.create({
       paymentId,
       orderId: order._id,
@@ -54,7 +61,10 @@ exports.initializePayment = async (req, res) => {
       amount: order.totalAmount,
       currency,
       status: 'pending',
-      transactionDetails: { merchant_code: merchantCode, reference_id: order.orderId }
+      transactionDetails: {
+        merchant_code: merchantCode,
+        reference_id: order.orderId  // ORD-xxxx (lisible)
+      }
     });
 
     res.status(200).json({
@@ -73,13 +83,14 @@ exports.initializePayment = async (req, res) => {
         first_name: req.user.fullName?.split(' ')[0] || 'Customer',
         last_name: req.user.fullName?.split(' ').slice(1).join(' ') || '',
         email: order.customerEmail || req.user.email,
-        phone: order.customerPhone || req.user.phone,
+        phone: order.customerPhone || req.user.phone || '',
         address: order.deliveryAddress?.street || '',
         city: order.deliveryAddress?.city || '',
         country: 'Sri Lanka'
       }
     });
   } catch (error) {
+    console.error('initializePayment error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -87,13 +98,12 @@ exports.initializePayment = async (req, res) => {
 // ─────────────────────────────────────────────
 // PAYHERE CALLBACK (notify_url)
 // ─────────────────────────────────────────────
-// PayHere posts to this endpoint after payment
 
 exports.payhereCallback = async (req, res) => {
   try {
     const {
       merchant_id,
-      order_id,      // this is our paymentId
+      order_id,         // = notre paymentId (PAY-xxxx)
       payment_id,
       payhere_amount,
       payhere_currency,
@@ -104,7 +114,7 @@ exports.payhereCallback = async (req, res) => {
 
     const merchantSecret = process.env.PAYHERE_MERCHANT_SECRET;
 
-    // Verify PayHere signature
+    // Vérification de la signature PayHere
     const hashedSecret = crypto
       .createHash('md5')
       .update(merchantSecret)
@@ -120,16 +130,16 @@ exports.payhereCallback = async (req, res) => {
       .toUpperCase();
 
     if (md5sig !== expectedSig) {
+      console.error('PayHere callback: invalid signature');
       return res.status(400).json({ success: false, message: 'Invalid payment signature' });
     }
 
-    // Find the payment record
     const payment = await Payment.findOne({ paymentId: order_id });
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment record not found' });
     }
 
-    // status_code: 2 = success, 0 = pending, -1 = cancelled, -2 = failed
+    // status_code : 2=success, 0=pending, -1=cancelled, -2=failed
     const statusMap = { '2': 'success', '0': 'pending', '-1': 'cancelled', '-2': 'failed' };
     const newStatus = statusMap[String(status_code)] || 'failed';
 
@@ -139,7 +149,7 @@ exports.payhereCallback = async (req, res) => {
     payment.updatedAt = Date.now();
     await payment.save();
 
-    // Update the linked Order
+    // Mise à jour de la commande liée
     const order = await Order.findById(payment.orderId);
     if (order) {
       order.paymentStatus = newStatus === 'success' ? 'paid' : 'failed';
@@ -149,8 +159,10 @@ exports.payhereCallback = async (req, res) => {
       await order.save();
     }
 
+    // PayHere attend "OK" en réponse
     res.status(200).send('OK');
   } catch (error) {
+    console.error('payhereCallback error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -168,7 +180,6 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    // Only let the owner or admin check
     if (
       payment.customerId.toString() !== req.user.id &&
       req.user.role !== 'admin'

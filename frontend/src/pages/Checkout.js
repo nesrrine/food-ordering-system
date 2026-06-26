@@ -30,39 +30,38 @@ const Checkout = () => {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handlePlaceOrder = async (e) => {
-    e.preventDefault();
-    if (items.length === 0) return setError('Your cart is empty');
-    setLoading(true);
-    setError('');
+ const handlePlaceOrder = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    try {
-      // 1. Create order
-      const orderRes = await ordersAPI.createOrder({
-        items: items.map(i => ({ foodId: i._id, quantity: i.quantity })),
-        deliveryAddress: { street: form.street, city: form.city, postalCode: form.postalCode },
-        customerPhone: form.phone,
-        specialInstructions: form.notes,
-      });
+  try {
+    console.log('STEP 1 - items:', items);
+    const orderRes = await ordersAPI.createOrder({
+      items: items.map(i => ({ foodId: i._id, quantity: i.quantity })),
+      deliveryAddress: { street: form.street, city: form.city, postalCode: form.postalCode },
+      customerPhone: form.phone,
+      specialInstructions: form.notes,
+    });
+    console.log('STEP 1 OK:', orderRes.data);
 
-      const orderId = orderRes.data.orderId;
+    const orderId = orderRes.data.orderId;
+    console.log('STEP 2 - orderId:', orderId);
+    const payRes = await paymentsAPI.initializePayment({ orderId });
+    console.log('STEP 2 OK:', payRes.data);
 
-      // 2. Initialize payment
-      const payRes = await paymentAPI.initializePayment({ orderId });
-      setPaymentParams(payRes.data.paymentParams);
+    setPaymentParams(payRes.data.paymentParams);
+    clearCart();
+    setTimeout(() => { if (paymentFormRef.current) paymentFormRef.current.submit(); }, 300);
 
-      clearCart();
-
-      // 3. Submit PayHere form (next render)
-      setTimeout(() => {
-        if (paymentFormRef.current) paymentFormRef.current.submit();
-      }, 300);
-
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to place order');
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+    console.log('ERROR status:', err.response?.status);
+    console.log('ERROR data:', err.response?.data);
+    console.log('ERROR message:', err.message);
+    setError(err.response?.data?.message || err.message || 'Failed to place order');
+    setLoading(false);
+  }
+};
 
   if (items.length === 0 && !paymentParams) {
     return (
@@ -81,9 +80,14 @@ const Checkout = () => {
     <div style={styles.page}>
       <Navbar />
 
-      {/* Hidden PayHere form */}
+      {/* Hidden PayHere form — soumis automatiquement vers sandbox */}
       {paymentParams && (
-        <form ref={paymentFormRef} method="post" action="https://sandbox.payhere.lk/pay/checkout" style={{ display: 'none' }}>
+        <form
+          ref={paymentFormRef}
+          method="post"
+          action="https://sandbox.payhere.lk/pay/checkout"
+          style={{ display: 'none' }}
+        >
           {Object.entries(paymentParams).map(([key, val]) => (
             <input key={key} type="hidden" name={key} value={val} />
           ))}
@@ -206,6 +210,7 @@ const styles = {
     width: '100%', background: '#E8621A', color: '#fff',
     border: 'none', borderRadius: '10px',
     padding: '14px', fontSize: '15px', fontWeight: '500',
+    cursor: 'pointer',
   },
   summaryCard: { background: '#fff', border: '0.5px solid #EBEBEB', borderRadius: '12px', padding: '1.25rem', position: 'sticky', top: '80px' },
   orderItems: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' },
@@ -220,7 +225,7 @@ const styles = {
   empty: { textAlign: 'center', padding: '4rem 0' },
   emptyIcon: { fontSize: '48px', marginBottom: '1rem' },
   emptyText: { color: '#888780', marginBottom: '1rem' },
-  backBtn: { background: '#E8621A', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px' },
+  backBtn: { background: '#E8621A', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', cursor: 'pointer' },
 };
 
 export default Checkout;

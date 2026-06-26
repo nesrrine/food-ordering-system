@@ -33,7 +33,8 @@ const Auth = () => {
         navigate('/');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong');
+      // ✅ FIX: Affiche le message d'erreur correctement
+      setError(err.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }

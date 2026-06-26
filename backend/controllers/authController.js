@@ -2,19 +2,18 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
-// Generate JWT Token
+// ================= TOKEN =================
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '24h'
   });
 };
 
-// Register
+// ================= REGISTER =================
 exports.register = async (req, res) => {
   try {
     const { fullName, email, password, phone } = req.body;
 
-    // Validate input
     if (!fullName || !email || !password || !phone) {
       return res.status(400).json({
         success: false,
@@ -22,8 +21,8 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check if user exists
     const userExists = await User.findOne({ email });
+
     if (userExists) {
       return res.status(400).json({
         success: false,
@@ -31,7 +30,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Create user
     const user = await User.create({
       fullName,
       email,
@@ -39,43 +37,36 @@ exports.register = async (req, res) => {
       phone
     });
 
-    // Generate token
     const token = generateToken(user._id);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: 'Account created successfully',
       token,
       user: {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        role: user.role
+        role: user.role,
+        isActive: user.isActive
       }
     });
+
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Server error'
     });
   }
 };
 
-// Login
+// ================= LOGIN =================
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
-    }
-
-    // Check user exists
     const user = await User.findOne({ email }).select('+password');
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -83,19 +74,27 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check password
-    const isMatchPassword = await user.matchPassword(password);
-    if (!isMatchPassword) {
+    const isMatch = await user.matchPassword(password);
+
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Generate token
-    const token = generateToken(user._id);
+    // ✅ VÉRIFICATION ISACTIVE au LOGIN
+   if (!user.isActive) {
+  return res.status(403).json({
+    success: false,
+    message: '🚫 Ton compte est désactivé par l\'administrateur'
+  });
+}
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: '24h'
+    });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Login successful',
       token,
@@ -103,29 +102,31 @@ exports.login = async (req, res) => {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        role: user.role
+        role: user.role,
+        isActive: user.isActive
       }
     });
+
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message
     });
   }
 };
 
-// Get current user
+// ================= GET CURRENT USER =================
+// ✅ Cette fonction est appelée APRÈS checkActive, donc on sait que l'utilisateur est actif
 exports.getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      user
+      user: req.user
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Server error'
     });
   }
 };

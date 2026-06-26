@@ -17,6 +17,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
+  // ================= GET CURRENT USER =================
   const fetchCurrentUser = async () => {
     try {
       const response = await authAPI.getCurrentUser();
@@ -30,6 +31,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ================= LOGIN =================
   const login = async (email, password) => {
     try {
       const response = await authAPI.login({ email, password });
@@ -38,10 +40,13 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', response.data.token);
       return response.data;
     } catch (error) {
-      throw error;
+      // ✅ FIX: Récupère le message correctement du backend
+      const message = error.response?.data?.message || error.message || 'Login failed';
+      throw new Error(message);
     }
   };
 
+  // ================= REGISTER =================
   const register = async (fullName, email, password, phone) => {
     try {
       const response = await authAPI.register({
@@ -55,10 +60,13 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', response.data.token);
       return response.data;
     } catch (error) {
-      throw error;
+      // ✅ FIX: Récupère le message correctement du backend
+      const message = error.response?.data?.message || error.message || 'Register failed';
+      throw new Error(message);
     }
   };
 
+  // ================= LOGOUT =================
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -73,3 +81,5 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+export default AuthContext;

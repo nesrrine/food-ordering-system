@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
+  // ================= GET CURRENT USER =================
   const fetchCurrentUser = async () => {
     try {
       const response = await authAPI.getCurrentUser();
@@ -28,34 +29,48 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ================= LOGIN =================
   const login = async (email, password) => {
-    const response = await authAPI.login({
-      email,
-      password
-    });
+    try {
+      const response = await authAPI.login({ email, password });
 
-    setToken(response.data.token);
-    setUser(response.data.user);
-    localStorage.setItem('token', response.data.token);
+      setToken(response.data.token);
+      setUser(response.data.user);
+      localStorage.setItem('token', response.data.token);
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Login failed';
+
+      throw new Error(message);
+    }
   };
 
+  // ================= REGISTER =================
   const register = async (fullName, email, password, phone) => {
-    const response = await authAPI.register({
-      fullName,
-      email,
-      password,
-      phone
-    });
+    try {
+      const response = await authAPI.register({
+        fullName,
+        email,
+        password,
+        phone
+      });
 
-    setToken(response.data.token);
-    setUser(response.data.user);
-    localStorage.setItem('token', response.data.token);
+      setToken(response.data.token);
+      setUser(response.data.user);
+      localStorage.setItem('token', response.data.token);
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Register failed';
+
+      throw new Error(message);
+    }
   };
 
+  // ================= LOGOUT =================
   const logout = () => {
     setUser(null);
     setToken(null);
